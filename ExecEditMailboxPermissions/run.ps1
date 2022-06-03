@@ -28,7 +28,7 @@ $AddFullAccess = ($Request.body.AddFullAccess).Split([Environment]::NewLine)
 foreach ($UserAutomap in $AddFullAccess | Where-Object { $_ -ne "" } ) { 
     try {
         $MailboxPerms = New-ExoRequest -tenantid $Tenantfilter -cmdlet "Add-MailboxPermission" -cmdParams @{Identity = $userid; user = $UserAutomap; accessRights = @("FullAccess"); automapping = $true }
-        $results.add( "added $($Request.body.AccessAutomap) to $($username) Mailbox with automapping")
+        $results.add( "added $($UserAutomap) to $($username) Mailbox with automapping")
         Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME  -message "Gave full permissions to $($request.body.AccessAutomap) on $($username)" -Sev "Info" -tenant $TenantFilter
 
     }
@@ -41,13 +41,41 @@ $AddFullAccessNoAutoMap = ($Request.body.AddFullAccessNoAutoMap).Split([Environm
 
 foreach ($UserNoAutomap in $AddFullAccessNoAutoMap | Where-Object { $_ -ne "" } ) { 
     try {
-        $MailboxPerms = New-ExoRequest -tenantid $Tenantfilter -cmdlet "Add-MailboxPermission" -cmdParams @{Identity = $userid; user = $UserAutomap; accessRights = @("FullAccess"); automapping = $false }
-        $results.add( "added $($Request.body.AccessAutomap) to $($username) Mailbox without automapping")
+        $MailboxPerms = New-ExoRequest -tenantid $Tenantfilter -cmdlet "Add-MailboxPermission" -cmdParams @{Identity = $userid; user = $UserNoAutomap; accessRights = @("FullAccess"); automapping = $false }
+        $results.add( "added $UserNoAutomap to $($username) Mailbox without automapping")
         Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME  -message "Gave full permissions to $($request.body.AccessAutomap) on $($username)" -Sev "Info" -tenant $TenantFilter
     }
     catch {
         Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME  -message "Could not add mailbox permissions for $($request.body.AccessAutomap) on $($username)" -Sev "Error" -tenant $TenantFilter
         $results.add(  "Could not add shared mailbox permissions for $($username). Error: $($_.Exception.Message)")
+    }
+}
+
+$AddSendAS = ($Request.body.AddSendAs).Split([Environment]::NewLine)
+
+foreach ($UserSendAs in $AddSendAS  | Where-Object { $_ -ne "" } ) { 
+    try {
+        $MailboxPerms = New-ExoRequest -tenantid $Tenantfilter -cmdlet "Add-RecipientPermission" -cmdParams @{Identity = $userid; Trustee = $UserSendAs; accessRights = @("SendAs") }
+        $results.add( "added $AddSendAS to $($username) with Send As permissions")
+        Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME  -message "Gave sendas permissions to $($request.body.AddSendAs) on $($username)" -Sev "Info" -tenant $TenantFilter
+    }
+    catch {
+        Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME  -message "Could not add mailbox permissions for $($request.body.AccessAutomap) on $($username)" -Sev "Error" -tenant $TenantFilter
+        $results.add(  "Could not add send-as permissions for $($username). Error: $($_.Exception.Message)")
+    }
+}
+
+$RemoveSendAs = ($Request.body.RemoveSendAs).Split([Environment]::NewLine)
+
+foreach ($UserSendAs in $RemoveSendAs  | Where-Object { $_ -ne "" } ) { 
+    try {
+        $MailboxPerms = New-ExoRequest -tenantid $Tenantfilter -cmdlet "Remove-RecipientPermission" -cmdParams @{Identity = $userid; Trustee = $UserSendAs; accessRights = @("SendAs") }
+        $results.add( "Removed $AddSendAS from $($username) with Send As permissions")
+        Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME  -message "Remove sendas permissions to $($request.body.AddSendAs) on $($username)" -Sev "Info" -tenant $TenantFilter
+    }
+    catch {
+        Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME  -message "Could not remove mailbox permissions for $($request.body.AccessAutomap) on $($username)" -Sev "Error" -tenant $TenantFilter
+        $results.add(  "Could not remove send-as permissions for $($username). Error: $($_.Exception.Message)")
     }
 }
 
