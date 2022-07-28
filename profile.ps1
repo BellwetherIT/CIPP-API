@@ -11,7 +11,8 @@
 
 # Authenticate with Azure PowerShell using MSI.
 # Remove this if you are not planning on using MSI or Azure PowerShell.
-import-module .\GraphHelper.psm1
+Import-Module .\GraphHelper.psm1
+Disable-AzContextAutosave -Scope Process | Out-Null
 
 
 # Uncomment the next line to enable legacy AzureRm alias in Azure PowerShell.
