@@ -4,7 +4,7 @@ using namespace System.Net
 param($Request, $TriggerMetadata)
 
 $APIName = $TriggerMetadata.FunctionName
-Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME  -message "Accessed this API" -Sev "Debug"
+Write-LogMessage -user $request.headers.'x-ms-client-principal' -API $APINAME  -message "Accessed this API" -Sev "Debug"
 
 
 # Write to the Azure Functions log stream.
@@ -14,7 +14,7 @@ Write-Host "PowerShell HTTP trigger function processed a request."
 $TenantFilter = $Request.Query.TenantFilter
 try {
     $body = '{"deletedUserPersonalSiteRetentionPeriodInDays":360}'
-    $GraphRequest = New-GraphPostRequest -tenantid $TenantFilter -Uri "https://graph.microsoft.com/beta/admin/sharepoint/settings" -AsApp $true -Type patch -Body $body -ContentType "application/json"
+    $GraphRequest = (Get-Item $PSScriptRoot).Parent.FullName
     $StatusCode = [HttpStatusCode]::OK
 }
 catch {

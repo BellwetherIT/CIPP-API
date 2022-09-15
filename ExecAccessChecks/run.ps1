@@ -4,13 +4,13 @@
 param($Request, $TriggerMetadata)
 
 $APIName = $TriggerMetadata.FunctionName
-Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME -message 'Accessed this API' -Sev 'Debug'
+Write-LogMessage -user $request.headers.'x-ms-client-principal' -API $APINAME -message 'Accessed this API' -Sev 'Debug'
 
 
 # Write to the Azure Functions log stream.
 Write-Host 'PowerShell HTTP trigger function processed a request.'
 if ($Request.query.Permissions -eq 'true') {
-    Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME -message 'Started permissions check' -Sev 'Debug'
+    Write-LogMessage -user $request.headers.'x-ms-client-principal' -API $APINAME -message 'Started permissions check' -Sev 'Debug'
     $Messages = [System.Collections.Generic.List[string]]::new()
     $MissingPermissions = [System.Collections.Generic.List[string]]::new()
     $Links = [System.Collections.Generic.List[object]]::new()
@@ -32,18 +32,41 @@ if ($Request.query.Permissions -eq 'true') {
         )
         $GraphToken = Get-GraphToken -returnRefresh $true
         $GraphPermissions = $GraphToken.scope.split(' ') -replace 'https://graph.microsoft.com//', '' | Where-Object { $_ -notin @('email', 'openid', 'profile', '.default') }
-        #Write-Host ($GraphPermissions | ConvertTo-Json)
+
+        if ($env:MSI_SECRET) {
+            try {
+                Disable-AzContextAutosave -Scope Process | Out-Null
+                $AzSession = Connect-AzAccount -Identity
+
+                $KV = $ENV:WEBSITE_DEPLOYMENT_ID
+                $KeyVaultRefresh = Get-AzKeyVaultSecret -VaultName $kv -Name 'RefreshToken' -AsPlainText
+                if ($ENV:RefreshToken -ne $KeyVaultRefresh) {
+                    $Success = $false
+                    $Messages.Add('Your refresh token does not match key vault, follow the Clear Token Cache procedure.') | Out-Null
+                    $Links.Add([PSCustomObject]@{
+                            Text = 'Clear Token Cache'
+                            Href = 'https://cipp.app/docs/general/troubleshooting/#clear-token-cache'
+                        }
+                    ) | Out-Null
+                }
+                else {
+                    $Messages.Add('Your refresh token matches key vault.') | Out-Null
+                }
+            }
+            catch {
+                Write-LogMessage -user $request.headers.'x-ms-client-principal' -API $APINAME -tenant $tenant -message "Key vault exception: $($_) " -Sev 'Error'
+            }
+        }
 
         try {
             $AccessTokenDetails = Read-JwtAccessDetails -Token $GraphToken.access_token
-            #Write-Host ($AccessTokenDetails | ConvertTo-Json)
         }
         catch {
             $AccessTokenDetails = [PSCustomObject]@{
                 Name        = ''
                 AuthMethods = @()
             }
-            Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME -tenant $tenant -message "Token exception: $($_) " -Sev 'Error'
+            Write-LogMessage -user $request.headers.'x-ms-client-principal' -API $APINAME -tenant $tenant -message "Token exception: $($_) " -Sev 'Error'
             $Success = $false
         }
         
@@ -81,7 +104,7 @@ if ($Request.query.Permissions -eq 'true') {
         }
     }
     catch {
-        Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME -message "Permissions check failed: $($_) " -Sev 'Error'
+        Write-LogMessage -user $request.headers.'x-ms-client-principal' -API $APINAME -message "Permissions check failed: $($_) " -Sev 'Error'
         $Messages.Add("We could not connect to the API to retrieve the permissions. There might be a problem with the secure application model configuration. The returned error is: $($_)") | Out-Null
         $Success = $false
     }
@@ -105,7 +128,7 @@ if ($Request.query.Tenants -eq 'true') {
                 TenantName = "$($Tenant)"
                 Status     = 'Succesfully connected' 
             }
-            Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME -tenant $tenant -message 'Tenant access check executed succesfully' -Sev 'Info'
+            Write-LogMessage -user $request.headers.'x-ms-client-principal' -API $APINAME -tenant $tenant -message 'Tenant access check executed succesfully' -Sev 'Info'
 
         }
         catch {
@@ -113,12 +136,12 @@ if ($Request.query.Tenants -eq 'true') {
                 TenantName = "$($tenant)"
                 Status     = "Failed to connect to $($_.Exception.Message)" 
             }
-            Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME -tenant $tenant -message "Tenant access check failed: $($_) " -Sev 'Error'
+            Write-LogMessage -user $request.headers.'x-ms-client-principal' -API $APINAME -tenant $tenant -message "Tenant access check failed: $($_) " -Sev 'Error'
 
         }
 
         try {
-            $GraphRequest = New-ExoRequest -tenantid $Tenant -cmdlet "Get-OrganizationConfig" -ErrorAction Stop
+            $GraphRequest = New-ExoRequest -tenantid $Tenant -cmdlet 'Get-OrganizationConfig' -ErrorAction Stop
             @{ 
                 TenantName = "$($Tenant)"
                 Status     = 'Succesfully connected to Exchange'
@@ -133,7 +156,7 @@ if ($Request.query.Tenants -eq 'true') {
                 TenantName = "$($Tenant)"
                 Status     = "Failed to connect to Exchange: $($Message)" 
             }
-            Log-Request -user $request.headers.'x-ms-client-principal' -API $APINAME -tenant $tenant -message "Tenant access check for Exchange failed: $($Message) " -Sev 'Error'
+            Write-LogMessage -user $request.headers.'x-ms-client-principal' -API $APINAME -tenant $tenant -message "Tenant access check for Exchange failed: $($Message) " -Sev 'Error'
         }
     }
     if (!$Tenants) { $results = 'Could not load the tenants list from cache. Please run permissions check first, or visit the tenants page.' }
